@@ -5,6 +5,7 @@ import operator
 from collections import Counter
 from theano import tensor as T
 from functools import reduce
+from sklearn.preprocessing import MinMaxScaler
 
 
 class ChangePointDetector(object):
@@ -19,8 +20,20 @@ class ChangePointDetector(object):
         data - data we want to check for changepoints
         num_changepoints - maximum number of changepoints
         """
-
-        self.data = data
+        
+        if not isinstance(data, np.ndarray):
+            try:
+                data = np.asarray(data)
+            except:
+                raise TypeError("Input data must be convertible to numpy array!")
+        
+        
+        # scale data to be in the range [0, 1]
+        #self.scaler = MinMaxScaler(feature_range=(0, 1))
+        #data = self.scaler.fit_transform(data.reshape(-1, 1))
+        
+        self.max_data = np.max(data)
+        self.data = data / self.max_data
         self.num_changepoints = num_changepoints
         self.n_iter = 2000
 
@@ -116,17 +129,17 @@ class ChangePointDetector(object):
             # Define priors
             x = np.arange(len(data))
             sigma = pm.HalfNormal('sigma', sd=1)
-            intercept = pm.Normal('intercept', 0, sd=1)
-            x_coeff = pm.Normal('x_coef', 0, sd=1)
+            intercept = pm.Normal('intercept', mu=0, sd=1)
+            x_coeff = pm.Normal('x_coef', mu=0, sd=1)
 
             # Define likelihood
             likelihood = pm.Normal('y', mu=intercept + x_coeff * x,
                                 sd=sigma, observed=data)
 
             # Inference!
-            start = pm.find_MAP()
             step = pm.Metropolis()
-            trace = pm.sample(n_iter, step, start=start, random_seed=123, progressbar=False)
+            trace = pm.sample(n_iter, step, random_seed=123,
+                              progressbar=False)
 
             # evaluate model fit
             df = pd.DataFrame(pm.summary(trace))
@@ -208,5 +221,9 @@ class ChangePointDetector(object):
 
         # get predictions for given rmse
         preds_out = model_preds_list[rmse_models_fit.index(min(rmse_models_fit))]
+        
+        # return transformed mean predictions to make sure they are on the same scale
+        #preds_out = self.scaler.inverse_transform(np.asarray(preds_out).reshape(-1, 1))
+        preds_out = [i * self.max_data for i in preds_out]
 
         return min_rmse_cp_locations, preds_out
