@@ -5,7 +5,6 @@ import operator
 from collections import Counter
 from theano import tensor as T
 from functools import reduce
-from sklearn.preprocessing import MinMaxScaler
 
 
 class ChangePointDetector(object):
@@ -28,14 +27,12 @@ class ChangePointDetector(object):
                 raise TypeError("Input data must be convertible to numpy array!")
         
         
-        # scale data to be in the range [0, 1]
-        #self.scaler = MinMaxScaler(feature_range=(0, 1))
-        #data = self.scaler.fit_transform(data.reshape(-1, 1))
+        # scale data by dividing by max(data)
         
         self.max_data = np.max(data)
         self.data = data / self.max_data
         self.num_changepoints = num_changepoints
-        self.n_iter = 2000
+        self.n_iter = 2500
 
         return None
 
@@ -223,7 +220,6 @@ class ChangePointDetector(object):
         preds_out = model_preds_list[rmse_models_fit.index(min(rmse_models_fit))]
         
         # return transformed mean predictions to make sure they are on the same scale
-        #preds_out = self.scaler.inverse_transform(np.asarray(preds_out).reshape(-1, 1))
         preds_out = [i * self.max_data for i in preds_out]
 
         return min_rmse_cp_locations, preds_out
